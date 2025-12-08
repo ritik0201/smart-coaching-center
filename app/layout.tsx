@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Navbar from "@/components/navbar";
+import { SessionProvider } from "next-auth/react";
+import Providers from "./providers";
 
 
 export const metadata: Metadata = {
@@ -15,7 +18,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <Providers>
+          <Navbar />
+          {children}
+        </Providers>
       </body>
     </html>
   );

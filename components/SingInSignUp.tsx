@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, getSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface SignInSignUpProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface SignInSignUpProps {
 
 type Step = 'email' | 'signup' | 'otp';
 const SignInSignUp: React.FC<SignInSignUpProps> = ({ isOpen, onClose }) => {
+  const router = useRouter();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -38,20 +40,26 @@ const SignInSignUp: React.FC<SignInSignUpProps> = ({ isOpen, onClose }) => {
     setError('');
     setMessage('Sending OTP...');
 
-    // We use signIn to trigger the 'send-otp' action in the authorize function
-    const result = await signIn('credentials', {
-      redirect: false,
-      email,
-      action: 'send-otp',
-    });
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
 
-    setIsLoading(false);
-    if (result?.error === 'OTP_SENT') {
-      setMessage('An OTP has been sent to your email.');
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to send OTP');
+      }
+
+      setMessage(data.message);
       setStep('otp');
-    } else if (result?.error) {
-      setError(result.error);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
       setMessage('');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -92,11 +100,26 @@ const SignInSignUp: React.FC<SignInSignUpProps> = ({ isOpen, onClose }) => {
       action: 'verify-otp',
     });
 
-    setIsLoading(false);
     if (result?.ok) {
+      const session = await getSession();
+      const role = (session?.user as any)?.role;
+
+      if (role !== 'student') {
+        await signOut({ redirect: false });
+        setError('Access denied. Only students can login.');
+        setMessage('');
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(false);
       setMessage('Login successful!');
-      setTimeout(handleClose, 1000);
+      setTimeout(() => {
+        handleClose();
+        router.push('/student/dashboard');
+      }, 1000);
     } else {
+      setIsLoading(false);
       setError(result?.error || 'An unknown error occurred.');
       setMessage('');
     }
